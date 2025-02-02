@@ -79,9 +79,9 @@ class Gateway extends SubscriptionGateway
                 'frequency' => $subscription->frequency, // this method returns the frequency in days
             ],
 
-            'success_url' => $subscription->successUrl(),
+            'success_url' => $subscription->callbackUrl(), // this returns the user to callback() method
             'cancel_url' => $subscription->cancelUrl(),
-            'webhook_url' => $subscription->webhookUrl(), // this method listens on the calllback() method
+            'webhook_url' => $subscription->webhookUrl(), // this method listens on the webhook() method
         ]);
 
         // if something goes wrong, throw an exception
@@ -162,5 +162,22 @@ class Gateway extends SubscriptionGateway
         }
 
         return $response['status'] === 'active';
+    }
+
+    /**
+     * Cancels a subscription using the gateway's API
+     *     
+     */
+    public function cancelSubscription($subscription): bool
+    {
+        $clientSecret = $subscription->gateway->config('client_secret');
+
+        $response = Http::withToken($clientSecret)->get('https://example.app/api/v1/subscriptions/'.$subscription->subscription_id.'/cancel');
+
+        if ($response->failed()) {
+            return false;
+        }
+
+        return true;
     }
 }
