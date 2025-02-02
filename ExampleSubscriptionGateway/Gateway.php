@@ -103,14 +103,46 @@ class Gateway extends SubscriptionGateway
      */
     public function callback(Request $request)
     {
-        // listen for the webhook and update the subscription status
-        if($request->has('subscription_id')) {
-            $subscription = Subscription::where('subscription_id', $request->subscription_id)->first();
+        // The user gets redirected back from the gateway after completing their payment
+        // since we used $subscription->callbackUrl(), 'subscription_token' was injected in the 
+        // url query so we can retrieve it, make api call to gateway to check if the payment was completed
 
-            if ($subscription) {
-                $subscription->activate();
-            }
+        $subscription = Subscription::where('token', $request->get('token'))->first();
+
+        if($subscription) {
+            throw new \Exception('Subscription not found');
         }
+
+        $response = Http::get("https://example.app/api/v1/subscriptions/{$subscription->subscription_id}");
+
+        if($response->failed()) {
+            throw new \Exception('Failed to retrieve subscription');
+        }
+
+        if($response['status'] == 'active') {
+            $subscription->activate($response['id'], $response);
+        }
+
+        return redirect($subscription->callbackUrl());
+    }
+
+    /**
+     * Handle the webhook from the gateway.
+     */
+    public function webhook(Request $request)
+    {
+        // listen for the webhook and update the subscription status
+        $event = $request->get('event');
+        $customId = $request->get('custom_id');
+        $subscriptionId = $request->get('id');
+        $subscriptionData = $request->all();
+
+        if($event == 'SUBSCRIPTION.ACTIVATED') {
+            $subscription = Subscription::find($customId);
+            $subscription->activate($subscriptionId, $subscriptionData)
+        }
+
+        return response()->json(['success'], 200);
     }
 
     /**
